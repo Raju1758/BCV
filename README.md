@@ -1,4 +1,3 @@
 # BCV
-numpy==1.21.0
-opencv-python-headless==4.5.3.56
-streamlit==0.87.0
+Project
+
