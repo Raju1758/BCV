@@ -1,170 +1,111 @@
 import streamlit as st
 import cv2
 import numpy as np
+from PIL import Image
 
-# Functions for Geometric Transformations
-def apply_translation(image):
-    rows, cols = image.shape[:2]
-    M = np.float32([[1, 0, 50], [0, 1, 20]])  # Translation matrix
-    translated_img = cv2.warpAffine(image, M, (cols, rows))
-    return translated_img
+def perform_edge_detection(img, edge_type):
+    if edge_type == 'Canny':
+        edges = cv2.Canny(img, 50, 150)
+    elif edge_type == 'LoG':
+        img_blur = cv2.GaussianBlur(img, (3, 3), 0)
+        edges = cv2.Laplacian(img_blur, cv2.CV_64F)
+        edges = cv2.normalize(edges, None, 0, 1, cv2.NORM_MINMAX)
+        edges = (edges * 255).astype(np.uint8)
+    elif edge_type == 'DoG':
+        img_blur1 = cv2.GaussianBlur(img, (5, 5), 0)
+        img_blur2 = cv2.GaussianBlur(img, (9, 9), 0)
+        edges = img_blur1 - img_blur2
+    else:
+        edges = img
 
-def apply_rotation(image):
-    rows, cols = image.shape[:2]
-    M = cv2.getRotationMatrix2D((cols / 2, rows / 2), 45, 1)  # Rotation matrix (angle=45)
-    rotated_img = cv2.warpAffine(image, M, (cols, rows))
-    return rotated_img
-
-def apply_scaling(image):
-    scaled_img = cv2.resize(image, None, fx=0.5, fy=0.5)  # Scale by a factor of 0.5
-    return scaled_img
-
-def apply_shearing(image):
-    rows, cols = image.shape[:2]
-    M = np.float32([[1, 0.5, 0], [0.5, 1, 0]])  # Shearing matrix
-    sheared_img = cv2.warpAffine(image, M, (cols, rows))
-    return sheared_img
-
-def apply_flipping(image):
-    flipped_img = cv2.flip(image, 1)  # Horizontal flipping
-    return flipped_img
-
-def apply_edge_detection(image):
-    edges = cv2.Canny(image, 100, 200)
     return edges
 
-def apply_corner_detection(image):
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    corners = cv2.cornerHarris(gray, 2, 3, 0.04)
-    corners = cv2.normalize(corners, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-    return corners
+def crop_image(image):
+    
+    left = st.number_input("Left", min_value=0, max_value=image.shape[1], value=0)
+    top = st.number_input("Top", min_value=0, max_value=image.shape[0], value=0)
+    right = st.number_input("Right", min_value=left, max_value=image.shape[1], value=image.shape[1])
+    bottom = st.number_input("Bottom", min_value=top, max_value=image.shape[0], value=image.shape[0])
 
-# Functions for Color Transformations
+    
+    cropped_image = image[top:bottom, left:right, :]
+
+    return cropped_image
+
+def rotate_image(image):
+    angle = st.slider("Rotation Angle", min_value=0, max_value=360, value=0)
+
+    rows, cols, _ = image.shape
+    M = cv2.getRotationMatrix2D((cols / 2, rows / 2), angle, 1)
+    rotated_image = cv2.warpAffine(image, M, (cols, rows))
+
+    return rotated_image
+
 def convert_to_grayscale(image):
-    gray_img = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    return gray_img
+    grayscale_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
 
-def convert_color_space(image, color_space):
-    converted_img = cv2.cvtColor(image, color_space)
-    return converted_img
+    return grayscale_image
 
-def enhance_color(image, alpha=1.0, beta=0):
-    enhanced_img = cv2.convertScaleAbs(image, alpha=alpha, beta=beta)
-    return enhanced_img
+def scale_image(image):
+    scale_factor = st.slider("Scale Factor", min_value=0.1, max_value=5.0, value=1.0, step=0.1)
 
-# Edge Detection function
-def apply_edge_detection(image):
-    edges = cv2.Canny(image, 100, 200)
-    return edges
+    scaled_image = cv2.resize(image, None, fx=scale_factor, fy=scale_factor)
 
-# Corner Detection function
-def apply_corner_detection(image):
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    corners = cv2.cornerHarris(gray, 2, 3, 0.04)
-    corners = cv2.normalize(corners, None, alpha=0, beta=255, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_8U)
-    return corners
+    return scaled_image
 
 def main():
-    st.title('OpenCV Image Processing App')
+    st.sidebar.title("ASSIGNMENT")
+    selected_assignment = st.sidebar.radio("", ["Edge detection", "Image manipulation"])
 
-    uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "png", "jpeg"])
+    if selected_assignment == "Edge detection":
+        st.title("Edge Detection App")
 
-    if uploaded_file is not None:
-        file_bytes = np.asarray(bytearray(uploaded_file.read()), dtype=np.uint8)
-        image = cv2.imdecode(file_bytes, 1)
-        image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        st.image(image, caption='Uploaded Image', use_column_width=True)
+        uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
 
-        # Geometric Transformations checkboxes
-        geometric_operations = st.checkbox("Geometric Transformations")
-        selected_geometric_operations = []
-        if geometric_operations:
-            translation = st.checkbox("Translation")
-            rotation = st.checkbox("Rotation")
-            scaling = st.checkbox("Scaling")
-            shearing = st.checkbox("Shearing")
-            flipping = st.checkbox("Flipping")
+        if uploaded_file is not None:
+            image = cv2.imdecode(np.frombuffer(uploaded_file.read(), np.uint8), 1)
 
-            if translation:
-                selected_geometric_operations.append("Translation")
-            if rotation:
-                selected_geometric_operations.append("Rotation")
-            if scaling:
-                selected_geometric_operations.append("Scaling")
-            if shearing:
-                selected_geometric_operations.append("Shearing")
-            if flipping:
-                selected_geometric_operations.append("Flipping")
+            st.image(image, caption="Uploaded Image", use_column_width=True)
 
-        # Color Transformations checkboxes
-        color_operations = st.checkbox("Color Transformations")
-        if color_operations:
-            grayscale_conversion = st.checkbox("Grayscale Conversion")
-            color_space_conversion = st.checkbox("Color Space Conversion")
-            if color_space_conversion:
-                selected_color_space = st.selectbox("Select Color Space", ("RGB", "HSV", "LAB", "CMYK"))
-            color_enhancement = st.checkbox("Color Enhancement")
-                
-        
-        # Edge Detection checkbox
-        edge_detection = st.checkbox("Edge Detection")
+            edge_type = st.selectbox("Select Edge Detection Technique", ["Canny", "LoG", "DoG"])
 
-        # Corner Detection checkbox
-        corner_detection = st.checkbox("Corner Detection")
+            edges = perform_edge_detection(image, edge_type)
 
-        # Geometric Transformations processing on button click
-        if st.button("PROCESS") and (geometric_operations or color_operations):
-            if selected_geometric_operations:
-                st.header("Geometric Transformations")
-                for operation in selected_geometric_operations:
-                    if operation == 'Translation':
-                        translated_img = apply_translation(image)
-                        st.image(translated_img, caption='Translation', use_column_width=True)
-                    elif operation == 'Rotation':
-                        rotated_img = apply_rotation(image)
-                        st.image(rotated_img, caption='Rotation', use_column_width=True)
-                    elif operation == 'Scaling':
-                        scaled_img = apply_scaling(image)
-                        st.image(scaled_img, caption='Scaling', use_column_width=True)
-                    elif operation == 'Shearing':
-                        sheared_img = apply_shearing(image)
-                        st.image(sheared_img, caption='Shearing', use_column_width=True)
-                    elif operation == 'Flipping':
-                        flipped_img = apply_flipping(image)
-                        st.image(flipped_img, caption='Flipping', use_column_width=True)
-            
-            # Color Transformations
-            if color_operations: 
-                if grayscale_conversion:
-                    grayscale_img = convert_to_grayscale(image)
-                    st.header("Grayscale Conversion")
-                    st.image(grayscale_img, caption='Grayscale Image', use_column_width=True)
-                
-                if color_space_conversion:
-                    if selected_color_space:
-                        color_space = getattr(cv2, f'COLOR_BGR2{selected_color_space}')
-                        converted_img = convert_color_space(image, color_space)
-                        st.header(f"Color Space Conversion to {selected_color_space}")
-                        st.image(converted_img, caption=f"{selected_color_space} Image", use_column_width=True)
+            st.image(edges, caption=f"{edge_type} Edge Detection", use_column_width=True)
 
-            # Edge Detection
-            if edge_detection:
-                edges = apply_edge_detection(image)
-                st.header("Edge Detection")
-                st.image(edges, caption='Edge Detected Image', use_column_width=True)
+    elif selected_assignment == "Image manipulation":
+        st.title("Image Manipulation App")
 
-            # Corner Detection
-            if corner_detection:
-                corners = apply_corner_detection(image)
-                st.header("Corner Detection")
-                st.image(corners, caption='Corner Detected Image', use_column_width=True)
-        
-        if color_operations:    
-            if color_enhancement:
-                st.header("Color Enhancement")
-                alpha = st.slider("Contrast (Alpha)", 0.0, 3.0, 1.0)
-                beta = st.slider("Brightness (Beta)", 0, 100, 0)
-                enhanced_img = enhance_color(image, alpha=alpha, beta=beta)
-                st.image(enhanced_img, caption='Enhanced Image', use_column_width=True)
-if __name__ == '__main__':
+        # Upload image through Streamlit
+        uploaded_file = st.file_uploader("Choose an image...", type=["jpg", "jpeg", "png"])
+
+        if uploaded_file is not None:
+            # Read the uploaded image using OpenCV
+            image = cv2.imdecode(np.frombuffer(uploaded_file.read(), dtype=np.uint8), 1)
+            st.image(image, caption="Original Image", channels="BGR", use_column_width=True)
+
+            # Select image manipulation technique
+            manipulation_type = st.selectbox("Select Image Manipulation Technique", ["Crop", "Rotate", "Grayscale", "Scale"])
+
+            if manipulation_type == "Crop":
+                # Crop image
+                cropped_image = crop_image(image)
+                st.image(cropped_image, caption="Cropped Image", channels="BGR", use_column_width=True)
+
+            elif manipulation_type == "Rotate":
+                # Rotate image
+                rotated_image = rotate_image(image)
+                st.image(rotated_image, caption="Rotated Image", channels="BGR", use_column_width=True)
+
+            elif manipulation_type == "Grayscale":
+                # Convert to grayscale
+                grayscale_image = convert_to_grayscale(image)
+                st.image(grayscale_image, caption="Grayscale Image", use_column_width=True)
+
+            elif manipulation_type == "Scale":
+                # Scale image
+                scaled_image = scale_image(image)
+                st.image(scaled_image, caption="Scaled Image", channels="BGR", use_column_width=True)
+
+if __name__ == "__main__":
     main()
